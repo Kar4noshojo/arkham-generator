@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Arkham AI Module Generator</title>
     <link rel="stylesheet" href="style.css">
+    <!-- PDF 生成依赖 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
 
@@ -101,8 +104,11 @@
 
         <div id="view-preview" class="view-section">
             <div style="margin-bottom: 20px; text-align: right;">
-                <button class="btn ai-btn" onclick="window.print()" style="width: auto; display: inline-flex;">
-                    🖨️ 导出 PDF / 打印 (Export)
+                <button class="btn ai-btn" onclick="exportToPDF()" style="width: auto; display: inline-flex;">
+                    📄 导出 PDF (Export)
+                </button>
+                <button class="btn primary-btn" onclick="window.print()" style="width: auto; display: inline-flex; margin-left: 10px;">
+                    🖨️ 浏览器打印
                 </button>
             </div>
 

@@ -643,3 +643,83 @@ function setTheme(themeName) {
     document.body.setAttribute('data-theme', themeName);
 }
 setTheme('yellow');
+
+// ==========================================
+// PDF 导出功能
+// ==========================================
+async function exportToPDF() {
+    const bookContent = document.getElementById('book-content');
+    
+    if (!bookContent || bookContent.innerText.includes('请先在【创作台】')) {
+        alert('请先生成模组内容！');
+        return;
+    }
+
+    // 显示加载提示
+    const btn = document.querySelector('button[onclick="exportToPDF()"]');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '⏳ 正在生成 PDF...';
+    btn.disabled = true;
+
+    try {
+        const { jsPDF } = window.jspdf;
+        
+        // 临时样式调整以获得更好的渲染效果
+        const originalWidth = bookContent.style.width;
+        bookContent.style.width = '800px';
+        
+        // 使用 html2canvas 将内容转为图片
+        const canvas = await html2canvas(bookContent, {
+            scale: 2, // 提高清晰度
+            useCORS: true,
+            backgroundColor: '#fdf6e3', // 确保背景色
+            logging: false
+        });
+        
+        // 恢复原始宽度
+        bookContent.style.width = originalWidth;
+        
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        
+        // 计算 PDF 尺寸 (A4)
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        
+        const imgWidth = canvas.width;
+        const imgHeight = canvas.height;
+        
+        // 按宽度缩放
+        const ratio = pdfWidth / imgWidth * 2; // scale=2 的补偿
+        const scaledHeight = imgHeight * ratio / 2;
+        
+        // 如果内容超过一页，需要分页
+        let heightLeft = scaledHeight;
+        let position = 0;
+        
+        // 第一页
+        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, scaledHeight);
+        heightLeft -= pdfHeight;
+        
+        // 后续页
+        while (heightLeft > 0) {
+            position -= pdfHeight;
+            pdf.addPage();
+            pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, scaledHeight);
+            heightLeft -= pdfHeight;
+        }
+        
+        // 获取标题用于文件名
+        const titleCn = document.getElementById('val-final-branch')?.getAttribute('data-title-cn') || '克苏鲁模组';
+        const fileName = `${titleCn}_${new Date().toLocaleDateString('zh-CN')}.pdf`;
+        
+        pdf.save(fileName);
+        
+    } catch (e) {
+        console.error('PDF 生成失败:', e);
+        alert('PDF 生成失败: ' + e.message);
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
