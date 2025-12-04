@@ -33,7 +33,7 @@ Arkham Architect 是一个 Web 应用，帮助守密人 (Keeper) 快速生成《
 
 ### 2. 启动应用
 
-直接在浏览器中打开 `index.html` 文件即可使用。
+项目网址[https://kar4noshojo.github.io/arkham-generator/](https://kar4noshojo.github.io/arkham-generator/)
 
 ### 3. 配置 API
 

@@ -183,6 +183,11 @@ const Engine = {
 
         if(!context.loc) { alert("请先生成或填写上面的灵感信息！"); return; }
 
+        const btn = document.querySelector('button[onclick="Engine.generateBranchesAI()"]');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = "⏳ 翻阅命运之书...";
+        btn.disabled = true;
+
         const loader = document.getElementById('loading-branches');
         const container = document.getElementById('branch-container');
         loader.style.display = 'block';
@@ -219,6 +224,8 @@ const Engine = {
             alert("剧情生成失败，请重试");
         } finally {
             loader.style.display = 'none';
+            btn.innerHTML = originalText;
+            btn.disabled = false;
         }
     },
 
@@ -232,6 +239,11 @@ const Engine = {
 
     // 5. 自动书写模组 (包含标题生成逻辑)
     generateFullModule: async function() {
+        const btn = document.querySelector('button[onclick="Engine.generateFullModule()"]');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = "⏳ 书写中...";
+        btn.disabled = true;
+
         const loader = document.getElementById('loading-bar');
         const fill = loader.querySelector('.bar-fill');
         
@@ -303,6 +315,9 @@ const Engine = {
             console.error(e);
             alert("书写中断，请重试...");
             fill.style.background = 'var(--accent)';
+        } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
         }
     },
 
