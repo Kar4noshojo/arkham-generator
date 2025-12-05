@@ -316,6 +316,7 @@ const Engine = {
             alert("书写中断，请重试...");
             fill.style.background = 'var(--accent)';
         } finally {
+            loader.style.display = 'none';
             btn.innerHTML = originalText;
             btn.disabled = false;
         }
@@ -410,39 +411,49 @@ const Engine = {
         const sceneHtml = document.getElementById('scene-container').innerHTML;
         const timelineHtml = document.getElementById('out-timeline').innerHTML;
 
-        // 组装 HTML
+        // 组装 HTML - 每个章节独立分块，便于 PDF 分页
         const bookHtml = `
-            <div class="book-title">
-                ${titleCn}<br>
-                <span>${titleEn}</span>
-            </div>
-            
-            <div class="book-meta">
-                <span>🕰️ ${era}</span>
-                <span>💀 ${boss}</span>
+            <div class="book-section book-header-section">
+                <div class="book-title">
+                    ${titleCn}<br>
+                    <span>${titleEn}</span>
+                </div>
+                
+                <div class="book-meta">
+                    <span>🕰️ ${era}</span>
+                    <span>💀 ${boss}</span>
+                </div>
             </div>
 
-            <div class="book-columns">
+            <div class="book-section">
                 <div class="book-h1">1. 守密人背景 (Keeper's Lore)</div>
                 <div class="book-p">${truth}</div>
+            </div>
 
+            <div class="book-section">
                 <div class="book-h1">2. 事件时间表 (Timeline)</div>
                 <div style="font-size: 0.9rem; margin-bottom: 20px;">
                     <ul style="padding-left: 20px; line-height: 1.6;">
                        ${timelineHtml ? timelineHtml : "<li>（时间轴尚未生成）</li>"}
                     </ul>
                 </div>
+            </div>
 
+            <div class="book-section">
                 <div class="book-h1">3. 登场人物 (Dramatis Personae)</div>
-                <div style="font-size: 0.9rem; break-inside: avoid;">
+                <div style="font-size: 0.9rem;">
                    ${npcHtml ? npcHtml : "<p>（人物档案尚未生成）</p>"}
                 </div>
+            </div>
 
+            <div class="book-section">
                 <div class="book-h1">4. 调查场景 (Locations)</div>
                 <div style="font-size: 0.9rem;">
                    ${sceneHtml ? sceneHtml : "<p>（场景尚未生成）</p>"}
                 </div>
+            </div>
 
+            <div class="book-section">
                 <div class="book-h1">5. 结局与高潮 (Conclusion)</div>
                 <div class="book-p">${climax}</div>
             </div>
@@ -658,7 +669,7 @@ function setTheme(themeName) {
 setTheme('yellow');
 
 // ==========================================
-// PDF 导出功能
+// PDF 导出功能 (智能分页版)
 // ==========================================
 async function exportToPDF() {
     const bookContent = document.getElementById('book-content');
@@ -677,54 +688,145 @@ async function exportToPDF() {
     try {
         const { jsPDF } = window.jspdf;
         
+        // 创建 PDF (A4)
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const margin = 15; // 页边距 (mm)
+        const contentWidth = pdfWidth - margin * 2;
+        const contentHeight = pdfHeight - margin * 2;
+        
         // 获取当前主题的背景色
         const computedStyle = getComputedStyle(bookContent);
         const bgColor = computedStyle.backgroundColor || '#fdf6e3';
         
-        // 临时样式调整以获得更好的渲染效果
-        const originalWidth = bookContent.style.width;
-        bookContent.style.width = '800px';
+        // 临时克隆内容用于分页处理
+        const clone = bookContent.cloneNode(true);
+        clone.style.width = '760px';
+        clone.style.position = 'absolute';
+        clone.style.left = '-9999px';
+        clone.style.background = bgColor;
+        clone.style.padding = '20px';
+        document.body.appendChild(clone);
         
-        // 使用 html2canvas 将内容转为图片
-        const canvas = await html2canvas(bookContent, {
-            scale: 2, // 提高清晰度
-            useCORS: true,
-            backgroundColor: bgColor, // 使用当前主题背景色
-            logging: false
-        });
+        // 计算缩放比例
+        const scale = 2;
+        const pxToMm = contentWidth / 800; // 800px (760 + padding) 对应 contentWidth mm
         
-        // 恢复原始宽度
-        bookContent.style.width = originalWidth;
+        // 收集所有章节块 (.book-section)
+        let sections = clone.querySelectorAll('.book-section');
         
-        const imgData = canvas.toDataURL('image/jpeg', 0.95);
-        
-        // 计算 PDF 尺寸 (A4)
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
-        
-        const imgWidth = canvas.width;
-        const imgHeight = canvas.height;
-        
-        // 按宽度缩放
-        const ratio = pdfWidth / imgWidth * 2; // scale=2 的补偿
-        const scaledHeight = imgHeight * ratio / 2;
-        
-        // 如果内容超过一页，需要分页
-        let heightLeft = scaledHeight;
-        let position = 0;
-        
-        // 第一页
-        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, scaledHeight);
-        heightLeft -= pdfHeight;
-        
-        // 后续页
-        while (heightLeft > 0) {
-            position -= pdfHeight;
-            pdf.addPage();
-            pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, scaledHeight);
-            heightLeft -= pdfHeight;
+        // 如果没有找到 .book-section，回退到直接子元素
+        if (sections.length === 0) {
+            sections = clone.children;
         }
+        
+        let currentY = margin;
+        let isFirstBlock = true;
+        
+        // 辅助函数：渲染元素到 PDF
+        async function renderElementToPDF(element, forceNewPage = false) {
+            const canvas = await html2canvas(element, {
+                scale: scale,
+                useCORS: true,
+                backgroundColor: bgColor,
+                logging: false
+            });
+            
+            const imgData = canvas.toDataURL('image/jpeg', 0.95);
+            const imgHeightMm = (canvas.height / scale) * pxToMm;
+            
+            // 检查是否需要新页面
+            if (forceNewPage || (!isFirstBlock && currentY + imgHeightMm > pdfHeight - margin)) {
+                pdf.addPage();
+                // 新页面添加背景色
+                pdf.setFillColor(bgColor);
+                currentY = margin;
+            }
+            
+            // 如果单个元素太高（超过一页），需要分割
+            if (imgHeightMm > contentHeight) {
+                const totalHeightPx = canvas.height / scale;
+                const pageHeightPx = contentHeight / pxToMm;
+                let offsetY = 0;
+                let isFirstSlice = true;
+                
+                while (offsetY < totalHeightPx) {
+                    if (!isFirstSlice) {
+                        pdf.addPage();
+                        currentY = margin;
+                    }
+                    
+                    const remainingHeight = totalHeightPx - offsetY;
+                    const sliceHeight = Math.min(pageHeightPx, remainingHeight);
+                    
+                    // 创建分片 canvas
+                    const sliceCanvas = document.createElement('canvas');
+                    sliceCanvas.width = canvas.width;
+                    sliceCanvas.height = sliceHeight * scale;
+                    const ctx = sliceCanvas.getContext('2d');
+                    
+                    // 绘制背景色
+                    ctx.fillStyle = bgColor;
+                    ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+                    
+                    // 绘制内容片段
+                    ctx.drawImage(
+                        canvas,
+                        0, offsetY * scale, canvas.width, sliceHeight * scale,
+                        0, 0, canvas.width, sliceHeight * scale
+                    );
+                    
+                    const sliceImgData = sliceCanvas.toDataURL('image/jpeg', 0.95);
+                    const sliceHeightMm = sliceHeight * pxToMm;
+                    
+                    pdf.addImage(sliceImgData, 'JPEG', margin, currentY, contentWidth, sliceHeightMm);
+                    
+                    offsetY += sliceHeight;
+                    currentY = margin + sliceHeightMm;
+                    isFirstSlice = false;
+                }
+            } else {
+                // 正常添加
+                pdf.addImage(imgData, 'JPEG', margin, currentY, contentWidth, imgHeightMm);
+                currentY += imgHeightMm + 2; // 添加小间距
+            }
+            
+            isFirstBlock = false;
+        }
+        
+        // 遍历每个章节
+        for (let section of sections) {
+            // 预估章节高度
+            const tempCanvas = await html2canvas(section, {
+                scale: 1,
+                useCORS: true,
+                backgroundColor: bgColor,
+                logging: false
+            });
+            const estimatedHeightMm = tempCanvas.height * pxToMm;
+            
+            // 如果章节能放入当前页剩余空间，直接渲染整个章节
+            if (currentY + estimatedHeightMm <= pdfHeight - margin || isFirstBlock) {
+                await renderElementToPDF(section);
+            } else {
+                // 章节太大，需要分页处理
+                // 先翻页
+                pdf.addPage();
+                currentY = margin;
+                
+                // 如果整个章节能放入一页，直接渲染
+                if (estimatedHeightMm <= contentHeight) {
+                    await renderElementToPDF(section);
+                } else {
+                    // 章节超过一页，需要分割渲染
+                    await renderElementToPDF(section);
+                }
+            }
+        }
+        
+        // 清理临时元素
+        document.body.removeChild(clone);
         
         // 获取标题用于文件名
         const titleCn = document.getElementById('val-final-branch')?.getAttribute('data-title-cn') || '克苏鲁模组';

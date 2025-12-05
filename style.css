@@ -128,9 +128,18 @@ h3 { color: var(--accent); border-left: 4px solid var(--accent); padding-left: 1
     transition: 0.2s;
 }
 .ai-btn { background-color: var(--accent); color: #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
-.ai-btn:hover { opacity: 0.9; transform: translateY(-2px); }
+.ai-btn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-2px); }
 .primary-btn { border: 1px solid var(--text-primary); color: var(--text-primary); background: transparent; }
-.primary-btn:hover { background: var(--btn-hover); }
+.primary-btn:hover:not(:disabled) { background: var(--btn-hover); }
+
+/* 按钮禁用状态 */
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: none;
+    pointer-events: none;
+}
 
 /* --- 【修改 1】文本域样式 --- */
 textarea.input-field {
@@ -226,17 +235,33 @@ textarea.input-field {
     text-align: center; 
     font-style: italic; 
     color: var(--text-muted); 
-    margin-bottom: 50px; 
+    margin-bottom: 30px; 
     display: flex; 
     justify-content: center; 
     gap: 30px; 
 }
+
+/* 书籍章节分块 - 便于 PDF 智能分页 */
+.book-section {
+    margin-bottom: 30px;
+    text-align: justify;
+    line-height: 1.6;
+    break-inside: avoid-page;
+    page-break-inside: avoid;
+}
+.book-section.book-header-section {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+/* 保留旧的双栏布局类以兼容 */
 .book-columns { 
     column-count: 2; 
     column-gap: 40px; 
     text-align: justify; 
     line-height: 1.6; 
 }
+
 .book-h1 { 
     font-size: 1.4rem; 
     font-weight: bold; 
