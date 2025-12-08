@@ -1,9 +1,36 @@
+const SELECTORS = {
+    title: '.book-title',
+    section: '.book-section',
+    headerSection: '.book-header-section',
+    h1: '.book-h1', // Note: logic might check tagName H1 too
+    p: '.book-p',
+    meta: '.book-meta',
+    npc: {
+        container: '.npc-card',
+        info: '.npc-info',
+        desc: '.npc-desc',
+        portrait: '.npc-portrait',
+        printInfo: '.print-npc-info', // Legacy/Printer specific
+        printPortrait: '.print-npc-portrait'
+    },
+    scene: {
+        container: '.scene-box',
+        desc: '.scene-desc',
+        event: '.scene-event',
+        header: '.scene-header'
+    },
+    timeline: {
+        list: '#out-timeline',
+        item: 'li'
+    }
+};
+
 const DB = {
     eras: ["1920s 禁酒令", "现代 2025", "1890s 伦敦", "2050 赛博朋克"],
     locations: ["古老的灯塔", "废弃的精神病院", "被诅咒的博物馆", "深山旅馆"],
     bosses: ["星之彩", "深潜者大祭司", "疯狂的考古学家", "无形之子"],
     items: ["黄金蜂蜜酒", "死灵之书残页", "奇怪的录音笔", "外星矿石"],
-    
+
     // 简单的分支模版
     branchTemplates: [
         { type: "武力 (Combat)", text: "调查员在{LOC}正面遭遇了{BOSS}的爪牙，必须通过战斗杀出一条血路，而{ITEM}是唯一的武器。" },

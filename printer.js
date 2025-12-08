@@ -26,10 +26,15 @@ class Typesetter {
 
         // 像素转换率 (会在运行时计算)
         this.pxPerMm = 3.78; // 默认值 (96dpi)，实际会动态获取
+
+        // Callbacks
+        this.onProgress = null;
     }
 
     // 主入口：开始排版
-    async run() {
+    async run(options = {}) {
+        this.onProgress = options.onProgress;
+
         // 1. 准备打印容器
         const printRoot = document.getElementById('print-root') || this.createPrintRoot();
         printRoot.innerHTML = ''; // 清空旧内容
@@ -43,22 +48,20 @@ class Typesetter {
         // 4. 开始布局循环
         this.createNewPage(printRoot);
 
+        if (this.onProgress) this.onProgress('layouting');
+
         for (let atom of sourceAtoms) {
             await this.placeAtom(atom, printRoot);
         }
 
         // 5. 渲染 PDF (后台运行)
-        const btn = document.querySelector('button[onclick="exportToPDF()"]');
-        if (btn) btn.innerHTML = '📄 生成 PDF...';
+        if (this.onProgress) this.onProgress('rendering');
 
         setTimeout(async () => {
             await this.renderToPDF(this.pages);
-            if (btn) {
-                btn.innerHTML = '📄 导出 PDF (Export)';
-                btn.disabled = false;
-            }
             // 渲染完成后清理
             printRoot.innerHTML = '';
+            if (options.onComplete) options.onComplete();
         }, 100);
     }
 
@@ -102,7 +105,7 @@ class Typesetter {
             if (node.nodeType !== Node.ELEMENT_NODE) return;
 
             // 1. 头部跨栏区 -> type: spanning
-            if (node.classList.contains('book-header-section')) {
+            if (node.matches(SELECTORS.headerSection)) {
                 const clone = node.cloneNode(true);
                 clone.removeAttribute('style');
                 clone.classList.add('print-header-span');
@@ -111,13 +114,13 @@ class Typesetter {
             }
 
             // 2. 章节容器 -> 穿透
-            if (node.classList.contains('book-section')) {
+            if (node.matches(SELECTORS.section)) {
                 Array.from(node.children).forEach(child => traverse(child));
                 return;
             }
 
             // 3. 也是容器 -> 穿透
-            if (node.id === 'npc-container' || node.id === 'scene-container' || node.id === 'out-timeline') {
+            if (node.id === 'npc-container' || node.id === 'scene-container' || node.matches(SELECTORS.timeline.list)) {
                 Array.from(node.children).forEach(child => traverse(child));
                 return;
             }
@@ -128,13 +131,13 @@ class Typesetter {
 
             // 4. 识别特定组件
             let type = 'block';
-            if (node.tagName === 'H1' || node.classList.contains('book-title')) type = 'h1';
-            else if (node.tagName === 'H2' || node.classList.contains('book-h1')) type = 'h1'; // 映射为 h1
-            else if (node.classList.contains('npc-card')) type = 'npc-card';
-            else if (node.classList.contains('scene-box')) type = 'scene-box';
-            else if (node.classList.contains('book-p') || node.tagName === 'P') type = 'p';
+            if (node.tagName === 'H1' || node.matches(SELECTORS.title)) type = 'h1';
+            else if (node.tagName === 'H2' || node.matches(SELECTORS.h1)) type = 'h1'; // 映射为 h1
+            else if (node.matches(SELECTORS.npc.container)) type = 'npc-card';
+            else if (node.matches(SELECTORS.scene.container)) type = 'scene-box';
+            else if (node.matches(SELECTORS.p) || node.tagName === 'P') type = 'p';
             else if (node.tagName === 'LI') type = 'li';
-            else if (node.classList.contains('book-meta')) type = 'meta';
+            else if (node.matches(SELECTORS.meta)) type = 'meta';
 
             // 普通 DIV 穿透
             if (type === 'block' && node.tagName === 'DIV' && !node.className.includes('print-atom')) {
@@ -159,6 +162,21 @@ class Typesetter {
 
         Array.from(sourceNode.children).forEach(child => traverse(child));
         return atoms;
+    }
+
+    // 通用二分查找分割点
+    findBinarySplitIndex(totalLen, checkFn) {
+        let start = 0, end = totalLen, bestSplit = 0;
+        while (start <= end) {
+            const mid = Math.floor((start + end) / 2);
+            if (checkFn(mid)) {
+                bestSplit = mid;
+                start = mid + 1;
+            } else {
+                end = mid - 1;
+            }
+        }
+        return bestSplit;
     }
 
     createNewPage(root) {
@@ -284,25 +302,16 @@ class Typesetter {
         const topPart = originalNode.cloneNode(true);
         currentCol.appendChild(topPart);
 
-        // 尝试只保留 strong (时间) 和部分文本
-        // Structure: <strong>Time</strong> Text...
-        // 实际上 atomizeContent 只是 cloneNode，所以结构还在。
-
         const strongNode = topPart.querySelector('strong');
-        // 如果没有 strong，就当普通文本分
         if (!strongNode) {
             currentCol.removeChild(topPart);
             await this.splitTextNode(atom, limitHeight, root);
             return;
         }
 
-        // 基础高度测试：仅 strong 能放下吗？
-        //为了测试，先把文本删掉？
-        // childNodes: [strong, textNode]
         const textNode = Array.from(topPart.childNodes).find(n => n.nodeType === Node.TEXT_NODE && n.textContent.trim().length > 0);
 
         if (!textNode) {
-            // 只有 strong，放不下就换栏
             currentCol.removeChild(topPart);
             this.moveToNextColumn(root);
             await this.placeAtom(atom, root);
@@ -310,18 +319,10 @@ class Typesetter {
         }
 
         const fullText = textNode.textContent;
-        let start = 0, end = fullText.length, bestSplit = 0;
-
-        while (start <= end) {
-            const mid = Math.floor((start + end) / 2);
+        const bestSplit = this.findBinarySplitIndex(fullText.length, (mid) => {
             textNode.textContent = fullText.substring(0, mid) + '...';
-            if (topPart.offsetHeight <= limitHeight) {
-                bestSplit = mid;
-                start = mid + 1;
-            } else {
-                end = mid - 1;
-            }
-        }
+            return topPart.offsetHeight <= limitHeight;
+        });
 
         if (bestSplit < 5) {
             currentCol.removeChild(topPart);
@@ -355,7 +356,7 @@ class Typesetter {
         const originalNode = atom.node;
         const currentCol = this.currentPage.cols[this.currentColIndex];
 
-        const infoNode = originalNode.querySelector('.npc-info') || originalNode.querySelector('.print-npc-info');
+        const infoNode = originalNode.querySelector(SELECTORS.npc.info) || originalNode.querySelector(SELECTORS.npc.printInfo);
         if (!infoNode) {
             this.moveToNextColumn(root);
             await this.placeAtom(atom, root);
@@ -372,8 +373,8 @@ class Typesetter {
             return;
         }
 
-        const topInfo = topPart.querySelector('.npc-info') || topPart.querySelector('.print-npc-info');
-        const descNode = topInfo.querySelector('.npc-desc');
+        const topInfo = topPart.querySelector(SELECTORS.npc.info) || topPart.querySelector(SELECTORS.npc.printInfo);
+        const descNode = topInfo.querySelector(SELECTORS.npc.desc);
 
         if (!descNode) {
             currentCol.removeChild(topPart);
@@ -383,18 +384,10 @@ class Typesetter {
         }
 
         const rawText = descNode.innerText;
-        let start = 0, end = rawText.length, bestSplit = 0;
-
-        while (start <= end) {
-            const mid = Math.floor((start + end) / 2);
+        const bestSplit = this.findBinarySplitIndex(rawText.length, (mid) => {
             descNode.innerText = rawText.substring(0, mid) + '...';
-            if (topPart.offsetHeight <= limitHeight) {
-                bestSplit = mid;
-                start = mid + 1;
-            } else {
-                end = mid - 1;
-            }
-        }
+            return topPart.offsetHeight <= limitHeight;
+        });
 
         if (bestSplit < 10) {
             currentCol.removeChild(topPart);
@@ -412,11 +405,11 @@ class Typesetter {
         const bottomPart = originalNode.cloneNode(true);
         bottomPart.classList.add('print-fragment-end');
 
-        const bottomPortrait = bottomPart.querySelector('.npc-portrait') || bottomPart.querySelector('.print-npc-portrait');
+        const bottomPortrait = bottomPart.querySelector(SELECTORS.npc.portrait) || bottomPart.querySelector(SELECTORS.npc.printPortrait);
         if (bottomPortrait) bottomPortrait.style.display = 'none';
 
-        const bottomInfo = bottomPart.querySelector('.npc-info') || bottomPart.querySelector('.print-npc-info');
-        const bottomDesc = bottomInfo.querySelector('.npc-desc');
+        const bottomInfo = bottomPart.querySelector(SELECTORS.npc.info) || bottomPart.querySelector(SELECTORS.npc.printInfo);
+        const bottomDesc = bottomInfo.querySelector(SELECTORS.npc.desc);
         bottomDesc.innerText = rawText.substring(bestSplit);
 
         Array.from(bottomInfo.children).forEach(c => {
@@ -440,7 +433,7 @@ class Typesetter {
             return;
         }
 
-        const descNode = topPart.querySelector('.scene-desc');
+        const descNode = topPart.querySelector(SELECTORS.scene.desc);
         if (!descNode) {
             currentCol.removeChild(topPart);
             this.moveToNextColumn(root);
@@ -449,21 +442,12 @@ class Typesetter {
         }
 
         const rawText = descNode.innerText;
-        let start = 0, end = rawText.length, bestSplit = 0;
-
-        while (start <= end) {
-            const mid = Math.floor((start + end) / 2);
+        const bestSplit = this.findBinarySplitIndex(rawText.length, (mid) => {
             descNode.innerText = rawText.substring(0, mid) + '...';
-            const eventNode = topPart.querySelector('.scene-event');
+            const eventNode = topPart.querySelector(SELECTORS.scene.event);
             if (eventNode) eventNode.style.display = 'none';
-
-            if (topPart.offsetHeight <= limitHeight) {
-                bestSplit = mid;
-                start = mid + 1;
-            } else {
-                end = mid - 1;
-            }
-        }
+            return topPart.offsetHeight <= limitHeight;
+        });
 
         if (bestSplit < 5) {
             currentCol.removeChild(topPart);
@@ -473,7 +457,7 @@ class Typesetter {
         }
 
         descNode.innerText = rawText.substring(0, bestSplit);
-        const topEvent = topPart.querySelector('.scene-event');
+        const topEvent = topPart.querySelector(SELECTORS.scene.event);
         if (topEvent) topEvent.style.display = 'none';
 
         topPart.classList.add('print-fragment-start');
@@ -484,10 +468,10 @@ class Typesetter {
         const bottomPart = originalNode.cloneNode(true);
         bottomPart.classList.add('print-fragment-end');
 
-        const bottomHeader = bottomPart.querySelector('.scene-header');
+        const bottomHeader = bottomPart.querySelector(SELECTORS.scene.header);
         if (bottomHeader) bottomHeader.style.display = 'none';
 
-        const bottomDesc = bottomPart.querySelector('.scene-desc');
+        const bottomDesc = bottomPart.querySelector(SELECTORS.scene.desc);
         bottomDesc.innerText = rawText.substring(bestSplit);
 
         await this.placeAtom({ type: 'scene-box', node: bottomPart }, root);
@@ -500,18 +484,10 @@ class Typesetter {
         const currentCol = this.currentPage.cols[this.currentColIndex];
         currentCol.appendChild(tempNode);
 
-        let start = 0, end = fullText.length, bestFitIndex = 0;
-
-        while (start <= end) {
-            const mid = Math.floor((start + end) / 2);
+        const bestFitIndex = this.findBinarySplitIndex(fullText.length, (mid) => {
             tempNode.textContent = fullText.substring(0, mid) + '...';
-            if (tempNode.offsetHeight <= limitHeight) {
-                bestFitIndex = mid;
-                start = mid + 1;
-            } else {
-                end = mid - 1;
-            }
-        }
+            return tempNode.offsetHeight <= limitHeight;
+        });
 
         tempNode.textContent = fullText.substring(0, bestFitIndex);
         tempNode.classList.add('print-fragment-start');
@@ -548,7 +524,35 @@ class Typesetter {
 
 async function exportToPDF() {
     const btn = document.querySelector('button[onclick="exportToPDF()"]');
-    if (btn) { btn.innerHTML = '⏳ 正在排版 / Calculating...'; btn.disabled = true; }
-    try { const engine = new Typesetter(); await engine.run(); }
-    catch (e) { console.error(e); alert('排版引擎故障: ' + e.message); if (btn) { btn.innerHTML = '📄 导出 PDF (Export)'; btn.disabled = false; } }
+    const originalText = btn ? btn.innerHTML : '📄 导出 PDF';
+
+    if (btn) {
+        btn.innerHTML = '⏳ 正在排版 / Calculating...';
+        btn.disabled = true;
+    }
+
+    try {
+        const engine = new Typesetter();
+        await engine.run({
+            onProgress: (phase) => {
+                if (btn) {
+                    if (phase === 'rendering') btn.innerHTML = '📄 生成 PDF...';
+                }
+            },
+            onComplete: () => {
+                if (btn) {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }
+            }
+        });
+    }
+    catch (e) {
+        console.error(e);
+        alert('排版引擎故障: ' + e.message);
+        if (btn) {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    }
 }

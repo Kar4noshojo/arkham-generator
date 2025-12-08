@@ -13,6 +13,12 @@
     --nav-text-active: #d4af37;
     /* 侧边栏选中色：金色 */
     --border: #d4c5a9;
+    /* 
+     * 字体配置 - DOCX 导出说明:
+     * 西文字体直接读取 --font-serif 第一个值，完全动态
+     * 中文字体根据字体栈类型推断 (sans-serif→微软雅黑, 其他→宋体)
+     * 如需完全动态的中文字体，可添加 --font-cjk 变量并修改 exporter.js
+     */
     --font-serif: 'Georgia', 'Times New Roman', serif;
     --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.5);
     --btn-hover: #ece0c0;
@@ -447,9 +453,13 @@ textarea.input-field {
 
 .book-title span {
     font-size: 1.2rem;
+    font-family: var(--font-serif);
     font-weight: normal;
     display: block;
+    margin-top: 10px;
+    letter-spacing: 2px;
     text-transform: uppercase;
+    color: var(--text-muted);
 }
 
 .book-meta {
@@ -468,7 +478,7 @@ textarea.input-field {
     color: var(--accent);
     margin-top: 40px;
     margin-bottom: 15px;
-    border-bottom: 2px solid var(--border);
+    border-bottom: 1px solid var(--border);
     padding-bottom: 10px;
 }
 
@@ -771,4 +781,63 @@ li {
 .dropdown-menu a:hover {
     background-color: var(--bg-main);
     color: var(--accent);
+}
+
+/* --- 5. 密钥弹窗样式 (Modal) --- */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    /* 半透明黑色背景 */
+    backdrop-filter: blur(5px);
+    /* 背景模糊 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    /* 保证在最上层 */
+    animation: fadeIn 0.3s;
+}
+
+.modal-box {
+    background: var(--bg-panel);
+    padding: 40px;
+    width: 400px;
+    border-radius: 4px;
+    border: 2px solid var(--accent);
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+    text-align: center;
+}
+
+.modal-box h3 {
+    margin-top: 0;
+    color: var(--accent);
+    border-bottom: 1px dashed var(--border);
+    padding-bottom: 10px;
+}
+
+/* --- 6. 小按钮样式 (恢复) --- */
+.btn-small {
+    padding: 8px 15px;
+    font-size: 0.8rem;
+    border: 1px solid var(--border);
+    background: transparent;
+    cursor: pointer;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    font-family: var(--font-serif);
+}
+
+.btn-small:hover {
+    background: var(--btn-hover);
+    color: var(--accent);
+}
+
+.btn-delete:hover {
+    border-color: #8a0303;
+    color: #8a0303;
+    background: rgba(138, 3, 3, 0.1);
 }

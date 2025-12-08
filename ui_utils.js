@@ -14,7 +14,8 @@ function toggleDropdown(btn) {
 }
 
 // Close dropdown when clicking outside
-window.onclick = function (event) {
+// Close dropdown when clicking outside
+window.addEventListener('click', function (event) {
     if (!event.target.matches('.btn-toggle')) {
         const dropdowns = document.getElementsByClassName("dropdown-menu");
         for (let i = 0; i < dropdowns.length; i++) {
@@ -24,4 +25,14 @@ window.onclick = function (event) {
             }
         }
     }
+});
+
+// Common Download Helper
+function downloadFile(blob, filename) {
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }

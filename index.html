@@ -9,6 +9,8 @@
     <!-- PDF 生成依赖 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- Word DOCX 生成依赖 -->
+    <script src="https://unpkg.com/docx@9.5.1/dist/index.umd.cjs"></script>
 </head>
 
 <body>
@@ -131,12 +133,12 @@
                 <!-- Split Button Group -->
                 <!-- Split Button Group -->
                 <div class="split-btn-group">
-                    <button class="btn ai-btn btn-main" onclick="exportToPDF()">📄 导出 PDF (Export)</button>
+                    <button class="btn ai-btn btn-main" onclick="exportToPDF()">📄 导出 PDF </button>
                     <!-- Click to Toggle -->
                     <button class="btn ai-btn btn-toggle" onclick="toggleDropdown(this)">▼</button>
                     <div class="dropdown-menu" id="export-menu">
                         <!-- Use href="javascript:void(0)" to ensure clickability without jumping -->
-                        <a href="javascript:void(0)" onclick="exportToWord(); toggleDropdown()">💾 Word (.doc)</a>
+                        <a href="javascript:void(0)" onclick="exportToWord(); toggleDropdown()">💾 Word (.docx)</a>
                         <a href="javascript:void(0)" onclick="exportToTex(); toggleDropdown()">📐 LaTeX (.tex)</a>
                     </div>
                 </div>
